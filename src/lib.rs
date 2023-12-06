@@ -7,7 +7,8 @@
 //! pathfinding. Note that this assumes a uniform-cost grid. Pre-computes
 //! [connected components](https://en.wikipedia.org/wiki/Component_(graph_theory))
 //! to avoid flood-filling behaviour if no path exists.
-mod astar_jps;
+use core::fmt;
+use std::collections::VecDeque;
 
 use grid_util::direction::Direction;
 use grid_util::grid::{BoolGrid, Grid, SimpleGrid};
@@ -16,8 +17,8 @@ use log::info;
 use petgraph::unionfind::UnionFind;
 
 use crate::astar_jps::astar_jps;
-use core::fmt;
-use std::collections::VecDeque;
+
+pub mod astar_jps;
 
 /// Turns waypoints into a path on the grid which can be followed step by step. Due to symmetry this
 /// is typically one of many ways to follow the waypoints.
@@ -61,6 +62,7 @@ impl Default for PathingGrid {
         }
     }
 }
+
 impl PathingGrid {
     fn get_neighbours(&self, point: Point) -> Vec<Point> {
         point
@@ -130,8 +132,8 @@ impl PathingGrid {
         direction: Direction,
         goal: &F,
     ) -> Option<(Point, i32)>
-    where
-        F: Fn(&Point) -> bool,
+        where
+            F: Fn(&Point) -> bool,
     {
         let new_n = *initial + direction;
         if !self.can_move_to(new_n) {
@@ -146,7 +148,7 @@ impl PathingGrid {
         }
         if direction.diagonal()
             && (self.jump(&new_n, 1, direction.x_dir(), goal).is_some()
-                || self.jump(&new_n, 1, direction.y_dir(), goal).is_some())
+            || self.jump(&new_n, 1, direction.y_dir(), goal).is_some())
         {
             return Some((new_n, cost));
         }
@@ -177,8 +179,8 @@ impl PathingGrid {
         }
     }
     fn jps_neighbours<F>(&self, parent: Option<&Point>, node: &Point, goal: &F) -> Vec<(Point, i32)>
-    where
-        F: Fn(&Point) -> bool,
+        where
+            F: Fn(&Point) -> bool,
     {
         match parent {
             Some(parent_node) => {
@@ -322,7 +324,7 @@ impl PathingGrid {
                 |node_pos| *node_pos == goal,
             )
         }
-        .map(|(v, _c)| v)
+            .map(|(v, _c)| v)
     }
     /// Regenerates the components if they are marked as dirty.
     pub fn update(&mut self) {
@@ -343,23 +345,22 @@ impl PathingGrid {
                 if !self.grid.get(x, y) {
                     let parent_ix = self.grid.get_ix(x, y);
                     let point = Point::new(x as i32, y as i32);
-                    let neighbours = vec![
+
+                    [
                         Point::new(point.x, point.y + 1),
                         Point::new(point.x + 1, point.y),
                         Point::new(point.x + 1, point.y + 1),
                     ]
-                    .into_iter()
-                    .filter(|p| self.grid.point_in_bounds(*p) && !self.grid.get_point(*p))
-                    .map(|p| self.grid.get_ix(p.x as usize, p.y as usize))
-                    .collect::<Vec<usize>>();
-                    for ix in neighbours {
-                        self.components.union(parent_ix, ix);
-                    }
+                        .into_iter()
+                        .filter(|p| self.grid.point_in_bounds(*p) && !self.grid.get_point(*p))
+                        .map(|p| self.grid.get_ix(p.x as usize, p.y as usize))
+                        .for_each(|ix| { self.components.union(parent_ix, ix); });
                 }
             }
         }
     }
 }
+
 impl fmt::Display for PathingGrid {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "Grid:")?;
@@ -431,6 +432,7 @@ impl Grid<bool> for PathingGrid {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn test_component_generation() {
         let mut path_graph = PathingGrid::new(3, 4, true);

@@ -9,7 +9,10 @@ use num_traits::Zero;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
-use std::hash::Hash;
+use std::hash::{BuildHasherDefault, Hash};
+use rustc_hash::FxHasher;
+
+type FxIndexMap<K, V> = IndexMap<K, V, BuildHasherDefault<FxHasher>>;
 
 struct SmallestCostHolder<K> {
     estimated_cost: K,
@@ -40,7 +43,7 @@ impl<K: Ord> Ord for SmallestCostHolder<K> {
     }
 }
 #[allow(clippy::needless_collect)]
-fn reverse_path<N, V, F>(parents: &IndexMap<N, V>, mut parent: F, start: usize) -> Vec<N>
+fn reverse_path<N, V, F>(parents: &FxIndexMap<N, V>, mut parent: F, start: usize) -> Vec<N>
 where
     N: Eq + Hash + Clone,
     F: FnMut(&V) -> usize,
@@ -77,8 +80,8 @@ where
         cost: Zero::zero(),
         index: 0,
     });
-    let mut parents: IndexMap<N, (usize, C)> = IndexMap::new();
-    parents.insert(start.clone(), (usize::max_value(), Zero::zero()));
+    let mut parents: FxIndexMap<N, (usize, C)> = FxIndexMap::default();
+    parents.insert(start.clone(), (usize::MAX, Zero::zero()));
     while let Some(SmallestCostHolder { cost, index, .. }) = to_see.pop() {
         let successors = {
             let (node, &(parent_index, c)) = parents.get_index(index).unwrap();
