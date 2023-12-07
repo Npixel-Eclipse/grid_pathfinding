@@ -178,7 +178,7 @@ impl PathingGrid {
             }
         }
     }
-    fn jps_neighbours<F>(&self, parent: Option<&Point>, node: &Point, goal: &F) -> Vec<(Point, i32)>
+    pub fn jps_neighbours<F>(&self, parent: Option<&Point>, node: &Point, goal: &F) -> Vec<(Point, i32)>
         where
             F: Fn(&Point) -> bool,
     {
