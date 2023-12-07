@@ -1,15 +1,14 @@
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
+use std::hash::{BuildHasherDefault, Hash};
+
+use indexmap::IndexMap;
 /// This module implements a variant of
 /// [pathfinding's astar function](https://docs.rs/pathfinding/latest/pathfinding/directed/astar/index.html)
 /// which enables the JPS implementation to generate successors based on the parent if there is one
 /// as it should.
 use indexmap::map::Entry::{Occupied, Vacant};
-use indexmap::IndexMap;
 use num_traits::Zero;
-
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
-
-use std::hash::{BuildHasherDefault, Hash};
 use rustc_hash::FxHasher;
 
 type FxIndexMap<K, V> = IndexMap<K, V, BuildHasherDefault<FxHasher>>;
@@ -42,37 +41,20 @@ impl<K: Ord> Ord for SmallestCostHolder<K> {
         }
     }
 }
-#[allow(clippy::needless_collect)]
-fn reverse_path<N, V, F>(parents: &FxIndexMap<N, V>, mut parent: F, start: usize) -> Vec<N>
-where
-    N: Eq + Hash + Clone,
-    F: FnMut(&V) -> usize,
-{
-    let path = itertools::unfold(start, |i| {
-        parents.get_index(*i).map(|(node, value)| {
-            *i = parent(value);
-            node
-        })
-    })
-    .collect::<Vec<&N>>();
-    // Collecting the going through the vector is needed to revert the path because the
-    // unfold iterator is not double-ended due to its iterative nature.
-    path.into_iter().rev().cloned().collect()
-}
 
 pub fn astar_jps<N, C, FN, IN, FH, FS>(
     start: &N,
     mut successors: FN,
     mut heuristic: FH,
     mut success: FS,
-) -> Option<(Vec<N>, C)>
-where
-    N: Eq + Hash + Clone,
-    C: Zero + Ord + Copy,
-    FN: FnMut(&Option<&N>, &N) -> IN,
-    IN: IntoIterator<Item = (N, C)>,
-    FH: FnMut(&N) -> C,
-    FS: FnMut(&N) -> bool,
+) -> Option<(impl Iterator<Item=N>, C)>
+    where
+        N: Eq + Hash + Clone,
+        C: Zero + Ord + Copy,
+        FN: FnMut(&Option<&N>, &N) -> IN,
+        IN: IntoIterator<Item=(N, C)>,
+        FH: FnMut(&N) -> C,
+        FS: FnMut(&N) -> bool,
 {
     let mut to_see = BinaryHeap::new();
     to_see.push(SmallestCostHolder {
@@ -86,7 +68,12 @@ where
         let successors = {
             let (node, &(parent_index, c)) = parents.get_index(index).unwrap();
             if success(node) {
-                let path = reverse_path(&parents, |&(p, _)| p, index);
+                let path = itertools::unfold(index, move |i| {
+                    parents.get_index(*i).map(|(node, (index, _))| {
+                        *i = *index;
+                        node.clone()
+                    })
+                });
                 return Some((path, cost));
             }
             // We may have inserted a node several time into the binary heap if we found

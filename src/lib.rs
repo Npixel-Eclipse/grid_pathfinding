@@ -13,6 +13,7 @@ use std::collections::VecDeque;
 use grid_util::direction::Direction;
 use grid_util::grid::{BoolGrid, Grid, SimpleGrid};
 use grid_util::point::Point;
+use itertools::Itertools;
 use log::info;
 use petgraph::unionfind::UnionFind;
 
@@ -186,8 +187,8 @@ impl PathingGrid {
             Some(parent_node) => {
                 let mut succ = vec![];
                 let dir = parent_node.dir_obj(node);
-                for (n, c) in &self.pruned_neighborhood(dir, &node).0 {
-                    let dir = node.dir_obj(&n);
+                for (n, c) in &self.pruned_neighborhood(dir, node).0 {
+                    let dir = node.dir_obj(n);
                     if let Some((jumped_node, cost)) = self.jump(node, *c, dir, goal) {
                         let neighbour_dir = node.dir_obj(&jumped_node);
                         if IMPROVED_PRUNING
@@ -232,7 +233,7 @@ impl PathingGrid {
         if self.in_bounds(start.x, start.y) && self.in_bounds(goal.x, goal.y) {
             let start_ix = self.get_ix_point(start);
             !goal.moore_neighborhood().iter().any(|p| {
-                self.in_bounds(p.x, p.y) && self.components.equiv(start_ix, self.get_ix_point(&p))
+                self.in_bounds(p.x, p.y) && self.components.equiv(start_ix, self.get_ix_point(p))
             })
         } else {
             true
@@ -249,7 +250,7 @@ impl PathingGrid {
         approximate: bool,
     ) -> Option<Vec<Point>> {
         self.get_waypoints_single_goal(start, goal, approximate)
-            .map(|x| waypoints_to_path(x))
+            .map(waypoints_to_path)
     }
 
     /// Computes a path from start to one of the given goals. This is done by taking the
@@ -278,12 +279,12 @@ impl PathingGrid {
                 self.jps_neighbours(parent, node, &|node_pos| goals.contains(&node_pos))
             },
             |&point| {
-                (goals.iter().map(|x| point.move_distance(*x)).min().unwrap() as f32
+                (goals.iter().map(|x| point.move_distance(x)).min().unwrap() as f32
                     * HEURISTIC_FACTOR) as i32
             },
             |node_pos| goals.contains(&node_pos),
-        );
-        result.map(|(v, _c)| (*v.last().unwrap(), v))
+        ).map(|(v, _c)| v.collect_vec());
+        result.map(|v| (*v.last().unwrap(), v))
     }
     /// The raw waypoints (jump points) from which [get_path_single_goal](Self::get_path_single_goal) makes a path.
     pub fn get_waypoints_single_goal(
@@ -310,7 +311,7 @@ impl PathingGrid {
                 },
                 |&point| (point.move_distance(&goal) as f32 * HEURISTIC_FACTOR) as i32,
                 |node_pos| node_pos.move_distance(&goal) <= 1,
-            )
+            ).map(|(v, _c)| v.collect_vec())
         } else {
             if self.unreachable(&start, &goal) {
                 info!("{} is not reachable from {}", start, goal);
@@ -322,9 +323,8 @@ impl PathingGrid {
                 |&parent, node| self.jps_neighbours(parent, node, &|node_pos| *node_pos == goal),
                 |&point| (point.move_distance(&goal) as f32 * HEURISTIC_FACTOR) as i32,
                 |node_pos| *node_pos == goal,
-            )
+            ).map(|(v, _c)| v.collect_vec())
         }
-            .map(|(v, _c)| v)
     }
     /// Regenerates the components if they are marked as dirty.
     pub fn update(&mut self) {
